@@ -34,6 +34,7 @@ interface Config {
         accessToken: string
         instanceUrl: string
         apiVersion: string
+        excludeTables: string[]
     }
     targetOptions: {
         targetType: string,

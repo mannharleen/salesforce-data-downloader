@@ -1,7 +1,9 @@
 {
     "sourceOptions": {
         "accessToken": "",
-        "instanceUrl": "https://ap4.salesforce.com"
+        "instanceUrl": "https://ap4.salesforce.com",
+        "apiVersion": "v42.0",
+        "excludeTables": ["contact"]
     },
     "targetOptions": {
         "targetType": "jsonFile",

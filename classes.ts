@@ -32,7 +32,8 @@ const configSchema = {
         {
           "accessToken": "abcdefg",
           "instanceUrl": "https://ap4.salesforce.com",
-          "apiVersion": "v42.0"
+          "apiVersion": "v42.0",
+          "excludeTables": ["account"]
         }
       ],
       "additionalProperties": true,
@@ -70,6 +71,31 @@ const configSchema = {
           "examples": [
             "v42.0"
           ]
+        },
+        "excludeTables": {
+          "$id": "#/properties/tableOptions/properties/excludeTables",
+          "type": "array",
+          "title": "The excludeTables Schema",
+          "description": "An explanation about the purpose of this instance.",
+          "default": [],
+          "examples": [
+            [
+              "account",
+              "contact"
+            ]
+          ],
+          "additionalItems": true,
+          "items": {
+            "$id": "#/properties/tableOptions/properties/excludeTables",
+            "type": "string",
+            "title": "The Items Schema",
+            "description": "An explanation about the purpose of this instance.",
+            "default": "",
+            "examples": [
+              "account",
+              "contact"
+            ]
+          }
         }
       }
     },
@@ -354,10 +380,10 @@ const configSchema = {
           "$id": "#/properties/jobOptions/properties/parallelNumTasks",
           "type": "integer",
           "minimum": 1,
-          "maximum": 30,
+          "maximum": 100,
           "title": "The Parallelnumtasks Schema",
           "description": "An explanation about the purpose of this instance.",
-          "default": 1,
+          "default": 20,
           "examples": [
             20
           ]
@@ -429,7 +455,6 @@ class SourceSalesforce implements Source {
         return res.body
 
       } else {
-        // throw new Error(`Could not read ${salesforceTable.tableName} ` + JSON.stringify(res.body))
         return Promise.reject(new Error(`Could not read ${salesforceTable.tableName} ` + JSON.stringify(res.body)))
       }
 
@@ -444,7 +469,6 @@ class SourceSalesforce implements Source {
         let records: any[] = res.body.fields
         toReturn = records.map(f => f.name)
       } else {
-        // throw new Error(`Could not describe ${salesforceTable.tableName} ` + JSON.stringify(res.body))
         return Promise.reject(new Error(`Could not describe ${salesforceTable.tableName} ` + JSON.stringify(res.body)))
       }
       return toReturn
@@ -458,7 +482,6 @@ class SourceSalesforce implements Source {
         let sobjects: any[] = res.body.sobjects
         return sobjects.map(f => f.name)
       } else {
-        // throw new Error(`Could not describe ${salesforceTable.tableName} ` + JSON.stringify(res.body))
         return Promise.reject(new Error(`Could not describe all objects ` + JSON.stringify(res.body)))
       }
     }
@@ -508,10 +531,9 @@ class Scheduler {
 
   constructor(config: Config) {
     // ajv
-    const ajvO = new ajv({ useDefaults: true, verbose: true }) //new Ajv.default({ allErrors: true }) //  { useDefaults: true }
+    const ajvO = new ajv({ useDefaults: true, verbose: true })
     var validate = ajvO.compile(configSchema);
     let valid = validate(config)
-    // let valid = ajv.validate(configSchema, config)
     if (!valid) {
       console.log(config)
       throw new Error(JSON.stringify(validate.errors))
@@ -525,11 +547,7 @@ class Scheduler {
       config.sourceOptions.apiVersion
     )
     this.salesforceTables = Object.keys(config.tableOptions).map(tableName => {
-      // note: if config.tableOptions.length == 0, then we take care of it during run()
       return new SalesforceTable(tableName, config.tableOptions[tableName].columnNames, config.tableOptions[tableName].predicate)
-      // return config.tableOptions[tableName].columnNames.length > 0 ?
-      //     new SalesforceTable(tableName, config.tableOptions[tableName].columnNames, config.tableOptions[tableName].predicate) :
-      //     new SalesforceTable(tableName)
     })
   }
   run: () => Promise<SchedulerStatus> = async () => {
@@ -538,16 +556,6 @@ class Scheduler {
       let tableNames = await this.sourceSalesforce.describeAllObjects()
       this.salesforceTables = tableNames.map(tableName => new SalesforceTable(tableName, [], ''))
     }
-    // const multiBar: cliProgress.MultiBar = new cliProgress.MultiBar({
-    //     // clearOnComplete: false,
-    //     // hideCursor: false,
-    //     // | Elapsed(s)={duration}
-    //     format: "{tableName} {bar} {percentage}% | Progress={value}/{total} | ETA(s)={eta} | status={status} | startedAt={startedAt} | stoppedAt={stoppedAt} | message={message}",
-    //     // forceRedraw: false,
-    //     // linewrap: false,
-    //     // noTTYOutput: true
-    // }, cliProgress.Presets.shades_grey);
-    //
     let target: Target
     if (this.config.targetOptions.targetType === 'console') {
       target = new TargetConsole()
@@ -556,20 +564,27 @@ class Scheduler {
     } else {
       return Promise.reject(new Error('invalid config.targetOptions.targetType = ' + this.config.targetOptions.targetType))
     }
-    // create entry schedulerStatus with tableStatus for all tables
-    for (let salesforceTable of this.salesforceTables) {
-      this.schedulerStatus[salesforceTable.tableName] = {
-        salesforceTable: salesforceTable,
-        status: "-",
-        startedAt: -1,
-        stoppedAt: -1,
-        message: "",
-        fullMessage: "",
-        totalRows: 0,
-        retrievedRows: 0,
-        timeTakenInSec: 0
+    
+    this.config.sourceOptions.excludeTables.forEach((excludeTable) => {
+      let idx = this.salesforceTables.findIndex((x) => capitalize(x.tableName) === capitalize(excludeTable))
+      if (idx >= 0) {
+        this.salesforceTables.splice(idx, 1)
       }
-    }
+      for (let salesforceTable of this.salesforceTables) {
+        this.schedulerStatus[salesforceTable.tableName] = {
+          salesforceTable: salesforceTable,
+          status: "-",
+          startedAt: -1,
+          stoppedAt: -1,
+          message: "",
+          fullMessage: "",
+          totalRows: 0,
+          retrievedRows: 0,
+          timeTakenInSec: 0
+        }
+      }
+
+    })
     // read & write
     await eachLimit(this.salesforceTables.map(salesforceTable => {
       return {
@@ -583,9 +598,6 @@ class Scheduler {
       this.config.jobOptions.parallelNumTasks < 1 ? 0 : this.config.jobOptions.parallelNumTasks,
       asyncTask
     )
-    // for (let salesforceTable of this.salesforceTables) {                
-    //     await task(this.sourceSalesforce, salesforceTable, target, this.schedulerStatus[salesforceTable.tableName], multiBar)
-    // }
 
     if (this.config.printStatus.printStatus) {
       if (this.config.printStatus.printStatusTo === 'console') {
@@ -604,8 +616,9 @@ class Scheduler {
 async function asyncTask(o: any, callback: any) {
   let multiBar = new cliProgress.MultiBar({
     format: "{tableName} {bar} {percentage}% | Progress={value}/{total} | ETA(s)={eta} | Elapsed(s)={duration} | status={status} | startedAt={startedAt} | stoppedAt={stoppedAt} | message={message}",
+    emptyOnZero: true
   }, cliProgress.Presets.shades_grey);
-  const bar1 = multiBar.create(100, 0, {
+  const bar1 = multiBar.create(0, 0, {
     status: "-",
     tableName: '[' + o.salesforceTable.tableName + ' '.repeat((30 - o.salesforceTable.tableName.length) > 0 ? 30 - o.salesforceTable.tableName.length : 0) + ']'
   })
@@ -620,9 +633,6 @@ async function asyncTask(o: any, callback: any) {
 // 1. get tableColumns if not provided in config
 // 2. get data and write to target
 async function task(sourceSalesforce: SourceSalesforce, salesforceTable: SalesforceTable, target: Target, tableStatus: TableStatus, bar1: cliProgress.SingleBar, targetSuffix: number, config: Config, nextRecordsUrl?: string): Promise<TableStatus> {
-
-  bar1.increment(1, tableStatus)
-
   try {
 
     if (salesforceTable.tableColumns.length == 0) {
@@ -633,39 +643,44 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
     tableStatus.totalRows = body.totalSize
     let data = records.map(r => { delete r.attributes; return r })
     tableStatus.retrievedRows += data.length
+
+    bar1.setTotal(tableStatus.totalRows)
+
     if (data.length > 0) {
       if (target.targetType === 'jsonFile') {
         // set the fileName to write
         let targetJsonFile = target as TargetJsonFile
-        if (tableStatus.retrievedRows === tableStatus.totalRows) {
+        if (tableStatus.retrievedRows === tableStatus.totalRows || body.done) {
           targetJsonFile.fileName = salesforceTable.tableName + (targetSuffix === 0 ? '' : ('_00' + targetSuffix).substr(0, 4))
         } else {
           targetJsonFile.fileName = salesforceTable.tableName + ('_00' + targetSuffix).substr(0, 4)
         }
-
       }
 
-      let capitalize = function(s : string): string {
-        return s.charAt(0).toUpperCase() + s.slice(1)
-      }
-      for (let maskColumnName of config.tableOptions[salesforceTable.tableName].maskColumnNames) {
-        maskColumnName = capitalize(maskColumnName)
-        if (config.tableOptions[salesforceTable.tableName].columnNames.map(c => capitalize(c)).includes(maskColumnName)) {
-          // need to hash some columns
-          data = data.map(r => {
-            r[maskColumnName] = crypto.createHash('sha256').update(r[maskColumnName]).digest("hex").toString()
-            return r
-          })
+      if (config.tableOptions[salesforceTable.tableName]) {
+        
+        for (let maskColumnName of config.tableOptions[salesforceTable.tableName].maskColumnNames) {
+          maskColumnName = capitalize(maskColumnName)
+          if (config.tableOptions[salesforceTable.tableName].columnNames.map(c => capitalize(c)).includes(maskColumnName)) {
+            // need to hash some columns
+            data = data.map(r => {
+              let sha = crypto.createHash('sha256')
+              sha.update(r[maskColumnName])
+              r[maskColumnName] = sha.digest("hex")
+              return r
+            })
+          }
         }
-
       }
+
       await target.write(data)
     }
 
-    bar1.setTotal(tableStatus.totalRows)
-    bar1.increment(1, tableStatus)
-
-    if (tableStatus.retrievedRows === tableStatus.totalRows) {
+    if (tableStatus.retrievedRows === tableStatus.totalRows || body.done) {
+      // OBSERVATION: I observed for objectname='FieldPermissions' that while '"totalSize": 10747', the pagination return a total #rows = 8551 only.
+      // Hence, resetting bar total
+      bar1.setTotal(tableStatus.retrievedRows)
+      
       tableStatus.status = 'success'
       tableStatus.stoppedAt = new Date().getTime()
       bar1.update(tableStatus.retrievedRows, tableStatus)
@@ -675,7 +690,7 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
       // call task again
       let nextRecordsUrl = body.nextRecordsUrl
       targetSuffix += 1
-      await task(sourceSalesforce, salesforceTable, target, tableStatus, bar1, targetSuffix, nextRecordsUrl)
+      await task(sourceSalesforce, salesforceTable, target, tableStatus, bar1, targetSuffix, config, nextRecordsUrl)
     }
 
     return Promise.resolve(tableStatus)
@@ -684,15 +699,14 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
     tableStatus.status = 'error'
     tableStatus.stoppedAt = new Date().getTime()
     bar1.increment(1, tableStatus)
-    tableStatus.message = e.message
     tableStatus.fullMessage = JSON.stringify(e)
+    tableStatus.message = e.message
     return Promise.resolve(tableStatus)
-    // bar1.increment(1, {
-    //     status: "error"
-    // })
-    // return Promise.reject(e)
   }
 }
-// }
+
+let capitalize = function (s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
 
 export { SalesforceAuthenticator, SourceSalesforce, TargetConsole, SalesforceTable, Scheduler }

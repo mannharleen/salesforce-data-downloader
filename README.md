@@ -44,7 +44,7 @@ For Windows command prompt a value of 300 is recommended, go to properties->layo
 - [x] Progress bar for each object (aka table)
 - [x] Include all objects
 - [x] Specify objects to be included
-- [ ] Specify objects to be exclude
+- [x] Specify objects to be exclude
 - [x] Take care of scenarios when #rows in a object > 2000 i.e. pagination
 - [x] Data masking (hashing) at column level of an object
 - [x] Provide Salesforce API version to use
@@ -74,6 +74,7 @@ Important notes on configuration:
 | sourceOptions.accessToken | string    | Required  | |
 | sourceOptions.instanceUrl | string    | Required  | |
 | sourceOptions.apiVersion  | string    | Not Required; Default = v42.0 | |
+| sourceOptions.excludeTables  | array    | Not Required | |
 | targetOptions             | object    | Not Required  | Provide config values for Target here |
 | targetOptions.targetType                  | string    | Not Required; One of console/jsonFile; Default = jsonFile  |  |
 | targetOptions.jsonFileOptions             | object    | Not Required  |  |
@@ -89,7 +90,7 @@ Important notes on configuration:
 | printStatus.jsonFileOptions   | object | Not Required |  | 
 | printStatus.jsonFileOptions.folderName   | string | Not Required; Default = _downloaded |  | 
 | jobOptions    | object | Not Required | Provide config values for the downloader |
-| jobOptions.parallelNumTasks    | string | Not Required; Default = 1; Must be between 1 and 30 |  |
+| jobOptions.parallelNumTasks    | string | Not Required; Default = 20; Must be between 1 and 30 |  |
 
 Thus, any of the below are valid configurations:
 ```json
@@ -107,7 +108,8 @@ Thus, any of the below are valid configurations:
     "sourceOptions": {
         "accessToken": "xxx",
         "instanceUrl": "https://ap4.salesforce.com",
-        "apiVersion:: v47.0"
+        "apiVersion:: v47.0",
+        "excludeTables": ["contact"]
     },
     "targetOptions": {
         "targetType": "jsonFile",
@@ -150,6 +152,7 @@ Thus, any of the below are valid configurations:
         "accessToken": "xxx",
         "instanceUrl": "https://ap4.salesforce.com"
         // if "apiVersion" is not mentioned, defaults to v42.0
+        // if "excludeTables" is not mentioned, defaults to exclude nothing
     },
     "targetOptions": {
         "targetType": "console" // if "targetType" == console, "jsonFileOptions" is not required
