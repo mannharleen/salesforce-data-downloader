@@ -1,0 +1,40 @@
+{
+    "sourceOptions": {
+        "accessToken": "",
+        "instanceUrl": "https://ap4.salesforce.com"
+    },
+    "targetOptions": {
+        "targetType": "jsonFile",
+        "jsonFileOptions": {
+            "folderName": "_downloaded"
+        }
+    },
+    "tableOptions": {
+        "account": {
+            "columnNames": [
+                "id",
+                "name"
+            ],
+            "predicate": "limit 1"
+        },
+        "contact": {
+            "columnNames": [
+                "id"
+            ],
+            "predicate": "limit 1",
+            "maskColumnNames": [
+                "name"
+            ]
+        }
+    },
+    "printStatus": {
+        "printStatus": true,
+        "printStatusTo": "jsonFile",
+        "jsonFileOptions": {
+            "folderName": "_downloaded"
+        }
+    },
+    "jobOptions": {
+        "parallelNumTasks": 20
+    }
+}

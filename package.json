@@ -1,0 +1,27 @@
+{
+  "name": "salesforce-data-downloader",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node out/index.js",
+    "prestart": "tsc",
+    "exec": "node out/index.js"
+  },
+  "keywords": [
+    "salesforce",
+    "data-downloader"
+  ],
+  "author": "Harleen Mann",
+  "license": "MIT",
+  "dependencies": {
+    "@types/async": "^3.2.0",
+    "@types/cli-progress": "^3.4.2",
+    "@types/node-fetch": "^2.5.7",
+    "ajv": "^6.12.0",
+    "async": "^3.2.0",
+    "cli-progress": "^3.8.0",
+    "node-fetch": "^2.6.0"
+  },
+  "bin": "./out/index.js"
+}

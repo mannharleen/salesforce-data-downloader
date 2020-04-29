@@ -1,0 +1,1 @@
+pkg package.json --targets node10-win-x64
