@@ -524,7 +524,21 @@ class TargetJsonFile implements Target {
 }
 
 class Scheduler {
-  public schedulerStatus: SchedulerStatus = {}
+  public schedulerStatus: SchedulerStatus = {
+    detailedStatus: {},
+    summaryStatus: {
+      startedAt: -1,
+      stoppedAt: -1,
+      status: '',
+      message: '',
+      fullMessage: '',
+      totalRows: 0,
+      retrievedRows: 0,
+      timeTakenInSec: 0,
+      numTablesErrorStatus: 0,
+      numTablesSuccessStatus: 0
+    }
+  }
   sourceSalesforce: SourceSalesforce
   salesforceTables: SalesforceTable[]
   config: Config
@@ -564,14 +578,15 @@ class Scheduler {
     } else {
       return Promise.reject(new Error('invalid config.targetOptions.targetType = ' + this.config.targetOptions.targetType))
     }
-    
+
+    this.schedulerStatus.summaryStatus.startedAt = new Date().getTime()
     this.config.sourceOptions.excludeTables.forEach((excludeTable) => {
       let idx = this.salesforceTables.findIndex((x) => capitalize(x.tableName) === capitalize(excludeTable))
       if (idx >= 0) {
         this.salesforceTables.splice(idx, 1)
       }
       for (let salesforceTable of this.salesforceTables) {
-        this.schedulerStatus[salesforceTable.tableName] = {
+        this.schedulerStatus.detailedStatus[salesforceTable.tableName] = {
           salesforceTable: salesforceTable,
           status: "-",
           startedAt: -1,
@@ -591,14 +606,25 @@ class Scheduler {
         sourceSalesforce: this.sourceSalesforce,
         salesforceTable: salesforceTable,
         target: target,
-        tableStatus: this.schedulerStatus[salesforceTable.tableName],
+        tableStatus: this.schedulerStatus.detailedStatus[salesforceTable.tableName],
+        // schedulerStatus: this.schedulerStatus,
         config: this.config
       }
     }),
-      this.config.jobOptions.parallelNumTasks < 1 ? 0 : this.config.jobOptions.parallelNumTasks,
+      this.config.jobOptions.parallelNumTasks, // < 1 ? 0 : this.config.jobOptions.parallelNumTasks,
       asyncTask
     )
 
+    this.schedulerStatus.summaryStatus.retrievedRows = Object.values(this.schedulerStatus.detailedStatus).map(tableStatus => tableStatus.retrievedRows).reduce((acc, v)=> acc+v)
+    this.schedulerStatus.summaryStatus.totalRows = Object.values(this.schedulerStatus.detailedStatus).map(tableStatus => tableStatus.totalRows).reduce((acc, v)=> acc+v)
+    let numTablesSuccessStatus = Object.values(this.schedulerStatus.detailedStatus).map(tableStatus => tableStatus.status).filter(x => x === 'success').length
+    let numTablesErrorStatus = this.salesforceTables.length - numTablesSuccessStatus
+    this.schedulerStatus.summaryStatus.status =  numTablesSuccessStatus === this.salesforceTables.length ? 'success' : numTablesErrorStatus === this.salesforceTables.length ? 'error' : 'success&error'
+    this.schedulerStatus.summaryStatus.numTablesSuccessStatus = numTablesSuccessStatus
+    this.schedulerStatus.summaryStatus.numTablesErrorStatus = numTablesErrorStatus
+    this.schedulerStatus.summaryStatus.stoppedAt = new Date().getTime()
+    this.schedulerStatus.summaryStatus.timeTakenInSec = (this.schedulerStatus.summaryStatus.stoppedAt - this.schedulerStatus.summaryStatus.startedAt)/1000
+    
     if (this.config.printStatus.printStatus) {
       if (this.config.printStatus.printStatusTo === 'console') {
         console.log(this.schedulerStatus)
@@ -624,15 +650,15 @@ async function asyncTask(o: any, callback: any) {
   })
 
   o.tableStatus.status = 'started'
-  o.tableStatus.startedAt = new Date().getTime()
+  o.tableStatus.startedAt = new Date().getTime()  
   let targetSuffix = 0
-  let toReturn = await task(o.sourceSalesforce, o.salesforceTable, o.target, o.tableStatus, bar1, targetSuffix, o.config)
+  let toReturn = await task(o.sourceSalesforce, o.salesforceTable, o.target, o.tableStatus, o.config, bar1, targetSuffix)
   multiBar.stop()
   callback()
 }
 // 1. get tableColumns if not provided in config
 // 2. get data and write to target
-async function task(sourceSalesforce: SourceSalesforce, salesforceTable: SalesforceTable, target: Target, tableStatus: TableStatus, bar1: cliProgress.SingleBar, targetSuffix: number, config: Config, nextRecordsUrl?: string): Promise<TableStatus> {
+async function task(sourceSalesforce: SourceSalesforce, salesforceTable: SalesforceTable, target: Target, tableStatus: TableStatus, config: Config, bar1: cliProgress.SingleBar, targetSuffix: number, nextRecordsUrl?: string): Promise<TableStatus> {
   try {
 
     if (salesforceTable.tableColumns.length == 0) {
@@ -658,7 +684,7 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
       }
 
       if (config.tableOptions[salesforceTable.tableName]) {
-        
+
         for (let maskColumnName of config.tableOptions[salesforceTable.tableName].maskColumnNames) {
           maskColumnName = capitalize(maskColumnName)
           if (config.tableOptions[salesforceTable.tableName].columnNames.map(c => capitalize(c)).includes(maskColumnName)) {
@@ -680,9 +706,18 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
       // OBSERVATION: I observed for objectname='FieldPermissions' that while '"totalSize": 10747', the pagination return a total #rows = 8551 only.
       // Hence, resetting bar total
       bar1.setTotal(tableStatus.retrievedRows)
+      // and throwing a warning
+      if (tableStatus.retrievedRows < tableStatus.totalRows && body.done) {
+        let warnMsg = `WARNING Salesforce says that for object named ${salesforceTable.tableName}, it has ${tableStatus.totalRows} #rows, but is sending only ${tableStatus.retrievedRows} #rows. Resetting tableStatus.totalRows to tableStatus.retrievedRows`        
+        console.warn(warnMsg)
+        tableStatus.totalRows = tableStatus.retrievedRows
+        tableStatus.message = warnMsg
+      }
       
+
       tableStatus.status = 'success'
       tableStatus.stoppedAt = new Date().getTime()
+      tableStatus.timeTakenInSec = (tableStatus.stoppedAt - tableStatus.startedAt) /1000
       bar1.update(tableStatus.retrievedRows, tableStatus)
     } else {
       // more rows are present! i.e. done = false; nextRecordsUrl
@@ -690,7 +725,7 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
       // call task again
       let nextRecordsUrl = body.nextRecordsUrl
       targetSuffix += 1
-      await task(sourceSalesforce, salesforceTable, target, tableStatus, bar1, targetSuffix, config, nextRecordsUrl)
+      await task(sourceSalesforce, salesforceTable, target, tableStatus, config, bar1, targetSuffix, nextRecordsUrl)
     }
 
     return Promise.resolve(tableStatus)
@@ -698,7 +733,8 @@ async function task(sourceSalesforce: SourceSalesforce, salesforceTable: Salesfo
   } catch (e) {
     tableStatus.status = 'error'
     tableStatus.stoppedAt = new Date().getTime()
-    bar1.increment(1, tableStatus)
+    tableStatus.timeTakenInSec = (tableStatus.stoppedAt - tableStatus.startedAt)/1000
+    bar1.increment(0, tableStatus)
     tableStatus.fullMessage = JSON.stringify(e)
     tableStatus.message = e.message
     return Promise.resolve(tableStatus)

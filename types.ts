@@ -21,7 +21,21 @@ interface TableStatus {
 }
 
 interface SchedulerStatus {
-    [salesforceTableName: string]: TableStatus
+    detailedStatus: {
+        [salesforceTableName: string]: TableStatus
+    }
+    summaryStatus: {
+        startedAt: number
+        stoppedAt: number
+        status: string
+        numTablesSuccessStatus: number
+        numTablesErrorStatus: number
+        message: string
+        fullMessage: string
+        totalRows: number
+        retrievedRows: number
+        timeTakenInSec: number
+    }
 }
 
 interface Target {
