@@ -55,7 +55,7 @@ For Windows command prompt a value of 300 is recommended, go to properties->layo
 - [x] Ability to take a predicate (a where clause, limit clause) to download a subset of the object rows
 - [ ] Use custom salesforce domain to login? check: is it even required?
 - [ ] Ability to disable progress bars
-- [ ] Provide summary stats in status report
+- [x] Provide summary status in status report
 - [ ] Provide a web based UI to create the config.json
 - [ ] Following targets are available
     - [x] console
