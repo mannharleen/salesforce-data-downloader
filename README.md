@@ -35,8 +35,9 @@ You should see an output like this:
 |Status||
 
 ## Gotchas
-If you see weird multiple lines of progress instead of progress bar updating on the same line, try increasing your terminal screen buffer.
+1. If you see weird multiple lines of progress instead of progress bar updating on the same line, try increasing your terminal screen buffer.
 For Windows command prompt a value of 300 is recommended, go to properties->layout->Screen Buffer Size->Width=300
+2. On rare occasions, when running SOQL on Salesforce, it will return a body specifying (via the field 'totalSize') that the total number of records = N, but in reality the total number of records it sends back will be less than N. This was observed on one particular object named 'FieldPermissions' during pagination using 'nextRecordsUrl'. Technically, 'done' = true was returned by salesforce before total number of rows = N were returned. This app throws a WARNING on the console and on the final status report if this happens.
 
 ## Features
 
