@@ -1,22 +1,38 @@
 # Salesforce data downloader
 An application that lets you download data from your salesforce org into multiple formats. The app also lets you to hash sensitive data at column level a.k.a data masking
-See **Features** section below for all features available.
+See **Features** section below for all features planned and available.
+
+# Table of contents
+
+- [Salesforce data downloader](#salesforce-data-downloader)
+  - [Motivation](#motivation)
+  - [Quickstart](#quickstart)
+  - [Glossary](#glossary)
+  - [Features](#features)
+  - [Configuration](#configuration)
+  - [Status report](#status-report)
+  - [Usage](#usage)
+    - [Option 1: Use pre compiled binary](#option-1-use-pre-compiled-binary)
+    - [Option 2: Build the code](#option-2-build-the-code)
+  - [Fun fact](#fun-fact)
+  - [Gotchas](#gotchas)
+  - [Appendix 1: How to obtain access_token](#appendix-1-how-to-obtain-accesstoken)
 
 ## Motivation
-Although there are many popular tools/apps out there that let you extract or download data from a Saleforce org, most of them have grave limitations unless you want pay up (I wont be surprised that even after paying up you will not get the flexibility).
+Although there are many popular tools/apps out there that let you extract or download data from a Saleforce org, most of them have grave limitations unless you want to pay up (I wont be surprised that even after paying up you will not get the flexibility) e.g. lack of data masking, unable to download certain tables, limits on number of rows etc.
 
-Some of the limitation are:
-1. Lack of data masking capabilities
-2. TODO...
 
 ## Quickstart
-- Download the latest release from [here](https://github.com/mannharleen/salesforce-data-downloader/releases).
+- Download the latest release from [here](https://github.com/mannharleen/salesforce-data-downloader/releases). Note that the current release v1.0.0 relies on you providing an access_token in the config.json file below. For help on how to obtain an access_token, visit Appendix 1.
 - Create a minimal config.json file (as below) in the same folder as the downloaded executable. Note that the below config.json file will download all data from salesforce
 ```json
 {
     "sourceOptions": {
         "accessToken": "xxx",
         "instanceUrl": "https://ap4.salesforce.com"
+    },
+    "tableOptions": {
+        "account": {}
     }
 }
 ```
@@ -24,13 +40,10 @@ Some of the limitation are:
 
 You should see an output like this:
 ```
-[AcceptedEventRelation         ] ████████████████████████████████████████ 100% | Progress=0/0 | ETA(s)=NULL | Elapsed(s)=3 | status=success | startedAt=1588082415556 | stoppedAt=1588082418085
 [Account                       ] ████████████████████████████████████████ 100% | Progress=3823/3823 | ETA(s)=0 | Elapsed(s)=8 | status=success | startedAt=1588082418087 | stoppedAt=1588082425858
-[AccountChangeEvent            ] █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 2% | Progress=2/100 | ETA(s)=123 | Elapsed(s)=3 | status=error | startedAt=1588082425860 | stoppedAt=1588082428361
-[AccountCleanInfo              ] ████████████████████████████████████████ 100% | Progress=0/0 | ETA(s)=NULL | Elapsed(s)=3 | status=success | startedAt=1588082428362 | stoppedAt=1588082430896
-........................
-........................
 ```
+- The downloaded data will be under the _downloaded folder
+- And a _status.json file will also be under the _downloaded folder
 
 ## Glossary
 
@@ -39,12 +52,7 @@ You should see an output like this:
 |Authenticator| Given Salesforce credentials, used to authenticated with Salesforce to obtain an access_token and an instance URL |
 |Source| The Salesforce org where data is sourced/downloaded from|
 |Target| The target where data is downloaded to|
-|Status||
-
-## Gotchas
-1. If you see weird multiple lines of progress instead of progress bar updating on the same line, try increasing your terminal screen buffer.
-For Windows command prompt a value of 300 is recommended, go to properties->layout->Screen Buffer Size->Width=300
-2. On rare occasions, when running SOQL on Salesforce, it will return a body specifying (via the field 'totalSize') that the total number of records = N, but in reality the total number of records it sends back will be less than N. This was observed on one particular object named 'FieldPermissions' during pagination using 'nextRecordsUrl'. Technically, 'done' = true was returned by salesforce before total number of rows = N were returned. This app throws a WARNING on the console and on the final status report if this happens.
+|Status| A status report is printed at the end of the downnlod job. For more info read the 'status report' section below |
 
 ## Features
 
@@ -294,7 +302,9 @@ let errorOnly = Object.values(s.detailedStatus).filter(x=> x.status === 'error')
 console.log(errorOnly)
 ```
 And that returned:
-```javascript
+<details>
+  <summary>Click to expand!</summary>
+```
 [ { tableName: 'AccountChangeEvent',
     message:
      'Could not read AccountChangeEvent [{"message":"entity type AccountChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
@@ -480,6 +490,7 @@ RY"}]' },
     message:
      `Could not read Vote [{"message":"Implementation restriction: When querying the Vote object, you must filter using the following syntax: ParentId = [single ID], Parent.Type = [single Type], Id = [single ID], or Id IN [list of ID's].","errorCode":"MALFORMED_QUERY"}]` } ]
 ```
+</details>
 
 > As you may notice, the errors are all valid, in that its not an application error, but Salesforce either does not allow querying these objects or needs predicates. This is the reason why the SAMPLE-config.json file conatins these objects in the exludeTables array.
 
@@ -498,4 +509,19 @@ Note - no errors
     "numTablesErrorStatus": 0,
     "numTablesSuccessStatus": 345
     }
+```
+
+## Gotchas
+1. If you see weird multiple lines of progress instead of progress bar updating on the same line, try increasing your terminal screen buffer.
+For Windows command prompt a value of 300 is recommended, go to properties->layout->Screen Buffer Size->Width=300
+2. On rare occasions, when running SOQL on Salesforce, it will return a body specifying (via the field 'totalSize') that the total number of records = N, but in reality the total number of records it sends back will be less than N. This was observed on one particular object named 'FieldPermissions' during pagination using 'nextRecordsUrl'. Technically, 'done' = true was returned by salesforce before total number of rows = N were returned. This app throws a WARNING on the console and on the final status report if this happens.
+
+## Appendix 1: How to obtain access_token
+If you have a valid credentials for a salesforce user and the client id & secret of a connected app, you could use postman or curl to send an HTTP request to obtain the access_token
+```shell
+#  an example using curl
+curl -X POST \
+  'https://login.salesforce.com/services/oauth2/token?grant_type=password&client_id=<CLIENTID>&client_secret=<CLIENTSECRET>&username=<USERNAME>&password=<PASSWORD>' \
+  -H 'cache-control: no-cache'
+
 ```
