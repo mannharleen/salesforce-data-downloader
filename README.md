@@ -2,6 +2,13 @@
 An application that lets you download data from your salesforce org into multiple formats. The app also lets you to hash sensitive data at column level a.k.a data masking
 See **Features** section below for all features available.
 
+## Motivation
+Although there are many popular tools/apps out there that let you extract or download data from a Saleforce org, most of them have grave limitations unless you want pay up (I wont be surprised that even after paying up you will not get the flexibility).
+
+Some of the limitation are:
+1. Lack of data masking capabilities
+2. TODO...
+
 ## Quickstart
 - Download the latest release from [here](https://github.com/mannharleen/salesforce-data-downloader/releases).
 - Create a minimal config.json file (as below) in the same folder as the downloaded executable. Note that the below config.json file will download all data from salesforce
@@ -62,10 +69,11 @@ For Windows command prompt a value of 300 is recommended, go to properties->layo
     - [x] console
     - [x] jsonFile; produces a file that contains an array. May produce multiple files per object with a prefix such as _000, _001 etc.
     - [ ] jsonlinesFile; one file per object that contains a row per line
+    - [ ] csvFiles
     - [ ] database
 
 
-## Config via config.json
+## Configuration
 Config is supplied by default in config.json
 
 Important notes on configuration:
@@ -75,7 +83,7 @@ Important notes on configuration:
 | sourceOptions.accessToken | string    | Required  | |
 | sourceOptions.instanceUrl | string    | Required  | |
 | sourceOptions.apiVersion  | string    | Not Required; Default = v42.0 | |
-| sourceOptions.excludeTables  | array    | Not Required | |
+| sourceOptions.excludeTables  | array    | Not Required; but recommended to have | The SAMPLE-config.json file provides some good defaults that you should keep in your config.json file. For reasoning, refer to section named "Fun fact" below |
 | targetOptions             | object    | Not Required  | Provide config values for Target here |
 | targetOptions.targetType                  | string    | Not Required; One of console/jsonFile; Default = jsonFile  |  |
 | targetOptions.jsonFileOptions             | object    | Not Required  |  |
@@ -85,7 +93,7 @@ Important notes on configuration:
 | tableOptions.<tableName>.columnNames              | array    | Not Required | |
 | tableOptions.<tableName>.predicate              | string    | Not Required | |
 | tableOptions.<tableName>.maskColumnNames              | array    | Not Required | maskColumnNames only work for columns included in columnNames|
-| printStatus               | object | Not Required | Provide config values for printing the final status of all tables | 
+| printStatus               | object | Not Required | Provide config values for printing the status report. More on status report in the below sections | 
 | printStatus.printStatus   | boolean | Not Required; Default = true |  | 
 | printStatus.printStatusTo   | string | Not Required; One of console/jsonFile; Default = jsonFile |  | 
 | printStatus.jsonFileOptions   | object | Not Required |  | 
@@ -182,19 +190,61 @@ Thus, any of the below are valid configurations:
 }
 ```
 
+## Status report
+The application collates status of each table as well as a summary level status for the entire download job. The status report can be configured using config.json (as described above) using the **printStatus** config option.
+
+- The status file is generated at the end of the job run.
+- The status file by default is named _status and present in the _downloaded folder. The file name and the folder are configurable.
+
+The status file takes the following schema:
+```typescript
+{
+    summaryStatus: {
+        startedAt: number
+        stoppedAt: number
+        status: string
+        numTablesSuccessStatus: number
+        numTablesErrorStatus: number
+        message: string
+        fullMessage: string
+        totalRows: number
+        retrievedRows: number
+        timeTakenInSec: number
+    },
+    detailedStatus: {
+       <tableNameXYZ>: {
+            salesforceTable: SalesforceTable
+            startedAt: number
+            stoppedAt: number
+            status: string
+            message: string
+            fullMessage: string
+            totalRows: number
+            retrievedRows: number
+            timeTakenInSec: number
+
+        },
+        .....
+    }
+
+}
+```
+
 ## Usage
 
-### Use pre compiled binary
+### Option 1: Use pre compiled binary
 
 - Download the latest release from [here](https://github.com/mannharleen/salesforce-data-downloader/releases)
+
 | Supported Platforms |
 |----------|
 | Win x64  |
 | |
-- Create a config.json file in the same folder as the downloaded executable
+
+- Create a config.json file in the same folder as the downloaded executable. You could use a same config file provided [here](https://raw.githubusercontent.com/mannharleen/salesforce-data-downloader/master/SAMPLE-config.json)
 - Execute the executable
 
-### Build the code and run on nodejs
+### Option 2: Build the code
 ```
 $ git clone <this repo>
 $ cd salesforce-data-downloader
@@ -218,3 +268,234 @@ As on Apr 2020, there were 406 objects.
 - /sobjects/describe # = 406
 - progress bars # = 406
 - status.json # = 406
+
+With the configured parallelism of 20, the app produces the following stats:
+It took under 1 min to download more than 16.5k records.
+```javascript
+    "summaryStatus": {
+        "startedAt": 1588252332072,
+        "stoppedAt": 1588252391212,
+        "status": "success&error",
+        "message": "",
+        "fullMessage": "",
+        "totalRows": 16674,
+        "retrievedRows": 16674,
+        "timeTakenInSec": 59.14,
+        "numTablesErrorStatus": 61,
+        "numTablesSuccessStatus": 345
+    }
+```
+
+On the _status.json I ran the following nodejs code to obtain a list of all errors:
+```javascript
+cosnt fs = require('fs')
+let s = JSON.parse(fs.readFileSync('./_downloaded/_status.json', 'utf8'))
+let errorOnly = Object.values(s.detailedStatus).filter(x=> x.status === 'error').map(x=> {return {"tableName": x.salesforceTable.tableName, "message":x.message}})
+console.log(errorOnly)
+```
+And that returned:
+```javascript
+[ { tableName: 'AccountChangeEvent',
+    message:
+     'Could not read AccountChangeEvent [{"message":"entity type AccountChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ActivityHistory',
+    message:
+     'Could not read ActivityHistory [{"message":"entity type ActivityHistory does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'AggregateResult',
+    message:
+     'Could not read AggregateResult [{"message":"entity type AggregateResult does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'AssetChangeEvent',
+    message:
+     'Could not read AssetChangeEvent [{"message":"entity type AssetChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'AssetTokenEvent',
+    message:
+     'Could not read AssetTokenEvent [{"message":"entity type AssetTokenEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'AttachedContentDocument',
+    message:
+     'Could not read AttachedContentDocument [{"message":"entity type AttachedContentDocument does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'CampaignChangeEvent',
+    message:
+     'Could not read CampaignChangeEvent [{"message":"entity type CampaignChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'CaseChangeEvent',
+    message:
+     'Could not read CaseChangeEvent [{"message":"entity type CaseChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'CombinedAttachment',
+    message:
+     'Could not read CombinedAttachment [{"message":"entity type CombinedAttachment does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ContactChangeEvent',
+    message:
+     'Could not read ContactChangeEvent [{"message":"entity type ContactChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ContentBody',
+    message:
+     'Could not read ContentBody [{"message":"entity type ContentBody does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ContentDocumentLink',
+    message:
+     `Could not read ContentDocumentLink [{"message":"Implementation restriction: ContentDocumentLink requires a filter by a single Id on ContentDocumentId or LinkedEntityId using the equals operator or multiple Id's using the IN operator.","errorCode":"MALFORMED_QUERY"}]` },
+  { tableName: 'ContentFolderItem',
+    message:
+     `Could not read ContentFolderItem [{"message":"Implementation restriction: ContentFolderItem requires a filter by Id or ParentContentFolderId using the equals or 'IN' operator","errorCode":"MALFORMED_QUERY"}]` },
+  { tableName: 'ContentFolderMember',
+    message:
+     'Could not read ContentFolderMember [{"message":"Implementation restriction: ContentFolderMember requires a filter by a single Id, ChildRecordId or ParentContentFolderId using the equals operator","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'DataStatistics',
+    message:
+     'Could not read DataStatistics [{"message":"Where clauses should contain StatType","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'DatacloudAddress',
+    message:
+     'Could not read DatacloudAddress [{"message":"SObject - DATACLOUD_ADDRESS : Transient queries are not implemented","errorCode":"EXTERNAL_OBJECT_EXCEPTION"}]' },
+  { tableName: 'DatacloudCompany',
+    message:
+     `Could not read DatacloudCompany [{"message":"Your organization doesn't have permission to access the Data.com API","errorCode":"DATACLOUD_API_DISABLED_EXCEPTION"}]` },
+  { tableName: 'DatacloudContact',
+    message:
+     `Could not read DatacloudContact [{"message":"Your organization doesn't have permission to access the Data.com API","errorCode":"DATACLOUD_API_DISABLED_EXCEPTION"}]` },
+  { tableName: 'DatacloudDandBCompany',
+    message:
+     'Could not read DatacloudDandBCompany [{"message":"Datacloud D&B company is not filterable without a criteria.","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'DatasetExportEvent',
+    message:
+     'Could not read DatasetExportEvent [{"message":"entity type DatasetExportEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'EmailStatus',
+    message:
+     'Could not read EmailStatus [{"message":"entity type EmailStatus does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'EntityParticle',
+    message:
+     'Could not read EntityParticle [{"message":"EntityParticle: a filter on a reified column is required [EntityDefinitionId,FieldDefinitionId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'EventChangeEvent',
+    message:
+     'Could not read EventChangeEvent [{"message":"entity type EventChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'EventRelationChangeEvent',
+    message:
+     'Could not read EventRelationChangeEvent [{"message":"entity type EventRelationChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'FeedLike',
+    message:
+     'Could not read FeedLike [{"message":"entity type FeedLike does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'FeedSignal',
+    message:
+     'Could not read FeedSignal [{"message":"entity type FeedSignal does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'FeedTrackedChange',
+    message:
+     'Could not read FeedTrackedChange [{"message":"entity type FeedTrackedChange does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'FieldDefinition',
+    message:
+     'Could not read FieldDefinition [{"message":"FieldDefinition: a filter on a reified column is required [EntityDefinitionId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'FlexQueueItem',
+    message:
+     'Could not read FlexQueueItem [{"message":"The WHERE clause must contain a JobType field expression.","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'FolderedContentDocument',
+    message:
+     'Could not read FolderedContentDocument [{"message":"entity type FolderedContentDocument does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'IdeaComment',
+    message:
+     'Could not read IdeaComment [{"message":"Implementation restriction. When querying the Idea Comment object, you must filter using the following syntax: CommunityId = [single ID], Id = [single ID], IdeaId = [single ID], Id IN [list of IDs], or IdeaId IN [list of IDs].","errorCode":
+RY"}]' },
+  { tableName: 'LeadChangeEvent',
+    message:
+     'Could not read LeadChangeEvent [{"message":"entity type LeadChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ListEmailChangeEvent',
+    message:
+     'Could not read ListEmailChangeEvent [{"message":"entity type ListEmailChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'ListViewChartInstance',
+    message:
+     'Could not read ListViewChartInstance [{"message":"Getting all ListViewChartInstances is unsupported","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'LogoutEventStream',
+    message:
+     'Could not read LogoutEventStream [{"message":"entity type LogoutEventStream does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'LookedUpFromActivity',
+    message:
+     'Could not read LookedUpFromActivity [{"message":"entity type LookedUpFromActivity does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'Name',
+    message:
+     'Could not read Name [{"message":"entity type Name does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'NoteAndAttachment',
+    message:
+     'Could not read NoteAndAttachment [{"message":"entity type NoteAndAttachment does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OpenActivity',
+    message:
+     'Could not read OpenActivity [{"message":"entity type OpenActivity does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OpportunityChangeEvent',
+    message:
+     'Could not read OpportunityChangeEvent [{"message":"entity type OpportunityChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OrderChangeEvent',
+    message:
+     'Could not read OrderChangeEvent [{"message":"entity type OrderChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OrderItemChangeEvent',
+    message:
+     'Could not read OrderItemChangeEvent [{"message":"entity type OrderItemChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OrgLifecycleNotification',
+    message:
+     'Could not read OrgLifecycleNotification [{"message":"entity type OrgLifecycleNotification does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OutgoingEmail',
+    message:
+     'Could not read OutgoingEmail [{"message":"This query is not supported on the OutgoingEmail object.","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'OutgoingEmailRelation',
+    message:
+     'Could not read OutgoingEmailRelation [{"message":"This query is not supported on the OutgoingEmail object.","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'OwnedContentDocument',
+    message:
+     'Could not read OwnedContentDocument [{"message":"entity type OwnedContentDocument does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'OwnerChangeOptionInfo',
+    message:
+     'Could not read OwnerChangeOptionInfo [{"message":"OwnerChangeOptionInfo: a filter on a reified column is required [EntityDefinitionId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'PicklistValueInfo',
+    message:
+     'Could not read PicklistValueInfo [{"message":"PicklistValueInfo: a filter on a reified column is required [EntityParticleId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'PlatformAction',
+    message:
+     'Could not read PlatformAction [{"message":"Getting all PlatformAction entities is unsupported","errorCode":"EXTERNAL_OBJECT_UNSUPPORTED_EXCEPTION"}]' },
+  { tableName: 'ProcessInstanceHistory',
+    message:
+     'Could not read ProcessInstanceHistory [{"message":"entity type ProcessInstanceHistory does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'Product2ChangeEvent',
+    message:
+     'Could not read Product2ChangeEvent [{"message":"entity type Product2ChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'QuoteTemplateRichTextData',
+    message:
+     'Could not read QuoteTemplateRichTextData [{"message":"entity type QuoteTemplateRichTextData does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'RelationshipDomain',
+    message:
+     'Could not read RelationshipDomain [{"message":"RelationshipDomain: a filter on a reified column is required [FieldId,ChildSobjectId,ParentSobjectId,RelationshipInfoId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'RelationshipInfo',
+    message:
+     'Could not read RelationshipInfo [{"message":"RelationshipInfo: a filter on a reified column is required [ChildSobjectId,FieldId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'SearchLayout',
+    message:
+     'Could not read SearchLayout [{"message":"SearchLayout: a filter on a reified column is required [EntityDefinitionId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'SiteDetail',
+    message:
+     'Could not read SiteDetail [{"message":"SiteDetail: a filter on a reified column is required [DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'TaskChangeEvent',
+    message:
+     'Could not read TaskChangeEvent [{"message":"entity type TaskChangeEvent does not support query","errorCode":"INVALID_TYPE_FOR_OPERATION"}]' },
+  { tableName: 'UserEntityAccess',
+    message:
+     'Could not read UserEntityAccess [{"message":"UserEntityAccess: a filter on a reified column is required [UserId,DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'UserFieldAccess',
+    message:
+     'Could not read UserFieldAccess [{"message":"UserFieldAccess: a filter on a reified column is required [DurableId]","errorCode":"MALFORMED_QUERY"}]' },
+  { tableName: 'UserRecordAccess',
+    message:
+     'Could not read UserRecordAccess [{"message":"Can select only RecordId, a Has*Access field, and MaxAccessLevel","errorCode":"INVALID_FIELD"}]' },
+  { tableName: 'Vote',
+    message:
+     `Could not read Vote [{"message":"Implementation restriction: When querying the Vote object, you must filter using the following syntax: ParentId = [single ID], Parent.Type = [single Type], Id = [single ID], or Id IN [list of ID's].","errorCode":"MALFORMED_QUERY"}]` } ]
+```
+
+> As you may notice, the errors are all valid, in that its not an application error, but Salesforce either does not allow querying these objects or needs predicates. This is the reason why the SAMPLE-config.json file conatins these objects in the exludeTables array.
+
+Just for comparion sake, include these columns in the excludeTables array of config.json file, the app produces the following results:
+Note - no errors
+```json
+"summaryStatus": {
+    "startedAt": 1588253479468,
+    "stoppedAt": 1588253529115,
+    "status": "success",
+    "message": "",
+    "fullMessage": "",
+    "totalRows": 16674,
+    "retrievedRows": 16674,
+    "timeTakenInSec": 49.647,
+    "numTablesErrorStatus": 0,
+    "numTablesSuccessStatus": 345
+    }
+```

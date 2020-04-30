@@ -3,7 +3,7 @@
         "accessToken": "",
         "instanceUrl": "https://ap4.salesforce.com",
         "apiVersion": "v42.0",
-        "excludeTables": ["contact"]
+        "excludeTables": [ "AccountChangeEvent", "ActivityHistory", "AggregateResult", "AssetChangeEvent", "AssetTokenEvent", "AttachedContentDocument", "CampaignChangeEvent", "CaseChangeEvent", "CombinedAttachment", "ContactChangeEvent", "ContentBody", "ContentDocumentLink", "ContentFolderItem", "ContentFolderMember", "DataStatistics", "DatacloudAddress", "DatacloudCompany", "DatacloudContact", "DatacloudDandBCompany", "DatasetExportEvent", "EmailStatus", "EntityParticle", "EventChangeEvent", "EventRelationChangeEvent", "FeedLike", "FeedSignal", "FeedTrackedChange", "FieldDefinition", "FlexQueueItem", "FolderedContentDocument", "IdeaComment", "LeadChangeEvent", "ListEmailChangeEvent", "ListViewChartInstance", "LogoutEventStream", "LookedUpFromActivity", "Name", "NoteAndAttachment", "OpenActivity", "OpportunityChangeEvent", "OrderChangeEvent", "OrderItemChangeEvent", "OrgLifecycleNotification", "OutgoingEmail", "OutgoingEmailRelation", "OwnedContentDocument", "OwnerChangeOptionInfo", "PicklistValueInfo", "PlatformAction", "ProcessInstanceHistory", "Product2ChangeEvent", "QuoteTemplateRichTextData", "RelationshipDomain", "RelationshipInfo", "SearchLayout", "SiteDetail", "TaskChangeEvent", "UserEntityAccess", "UserFieldAccess", "UserRecordAccess", "Vote" ]
     },
     "targetOptions": {
         "targetType": "jsonFile",

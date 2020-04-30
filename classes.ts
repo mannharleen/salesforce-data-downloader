@@ -585,21 +585,21 @@ class Scheduler {
       if (idx >= 0) {
         this.salesforceTables.splice(idx, 1)
       }
-      for (let salesforceTable of this.salesforceTables) {
-        this.schedulerStatus.detailedStatus[salesforceTable.tableName] = {
-          salesforceTable: salesforceTable,
-          status: "-",
-          startedAt: -1,
-          stoppedAt: -1,
-          message: "",
-          fullMessage: "",
-          totalRows: 0,
-          retrievedRows: 0,
-          timeTakenInSec: 0
-        }
-      }
-
     })
+    for (let salesforceTable of this.salesforceTables) {
+      
+      this.schedulerStatus.detailedStatus[salesforceTable.tableName] = {
+        salesforceTable: salesforceTable,
+        status: "-",
+        startedAt: -1,
+        stoppedAt: -1,
+        message: "",
+        fullMessage: "",
+        totalRows: 0,
+        retrievedRows: 0,
+        timeTakenInSec: 0
+      }
+    }
     // read & write
     await eachLimit(this.salesforceTables.map(salesforceTable => {
       return {
